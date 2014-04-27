@@ -15,12 +15,12 @@ import java.io.InputStream;
  */
 public class RadialHashAlgorithmTest {
 
-    private static final String EARTH1_HASH = "71fe3e4b002fb995ab6d466e8e7c7061705e6f7784727c7f897b7a6970757d6e6b646d67696a6768";
-    private static final String EARTH2_HASH = "9dff0c5e0039a797e28bc39f939bb8b1a798aeabb4a6a49fb9a0ab98a397b0a0a69ca9a2aa91a89b";
-    private static final double EARTHS_DISTANCE = 0.5332283524866961d;
-    private static final double EARTH_RESIZED_DISTANCE = 0.9105673748405818d;
-    private static final double EARTH_CROPPED_DISTANCE = 0.7961021599566369d;
-    private static final double EARTH_CAPTION_DISTANCE = 0.9999661575205901d;
+    private static final String EARTH1_HASH = "7cff4651003bc4a2b37a547a978b7b6e7a687c808d7c8688948983767f808c7d79727a7376757473";
+    private static final String EARTH2_HASH = "a3ff195b0048ac9be693c3a394a1bcb7ab9bb5b4baababa8c0a4b19daa9eb2a7aba2aea7af97ada3";
+    private static final double EARTHS_DISTANCE = 0.7189180787765737d;
+    private static final double EARTH_RESIZED_DISTANCE = 0.9999806438624114d;
+    private static final double EARTH_CROPPED_DISTANCE = 0.8785204004702291d;
+    private static final double EARTH_CAPTION_DISTANCE = 0.9590921706328405d;
 
     @Test
     public void testHashEarth1() throws IOException {
@@ -53,7 +53,7 @@ public class RadialHashAlgorithmTest {
     public void testEarthResizedDistance() throws IOException {
         Assert.assertEquals(EARTH_RESIZED_DISTANCE,
                 RadialHashAlgorithm.getSimilarity(
-                        RadialHash.fromString(EARTH1_HASH),
+                        getHashFor("earth1.jpg"),
                         getHashFor("earth1_resized.jpeg")
                 ), 0.000001);
     }
@@ -62,7 +62,7 @@ public class RadialHashAlgorithmTest {
     public void testEarthCroppedDistance() throws IOException {
         Assert.assertEquals(EARTH_CROPPED_DISTANCE,
                 RadialHashAlgorithm.getSimilarity(
-                        RadialHash.fromString(EARTH1_HASH),
+                        getHashFor("earth1.jpg"),
                         getHashFor("earth1_cropped.jpeg")
                 ), 0.000001);
     }
@@ -70,10 +70,33 @@ public class RadialHashAlgorithmTest {
     public void testEarthCaptionDistance() throws IOException {
         Assert.assertEquals(EARTH_CAPTION_DISTANCE,
                 RadialHashAlgorithm.getSimilarity(
-                        RadialHash.fromString(EARTH1_HASH),
+                        getHashFor("earth1.jpg"),
                         getHashFor("earth1_caption.jpeg")
                 ), 0.000001);
     }
+//
+//    @Test
+//    public void showResizeResult_earth1() throws IOException {
+//        InputStream inputStream = getClass().getClassLoader().getResourceAsStream("earth1.jpg");
+//        BufferedImage img = ImageIO.read(inputStream);
+//        new SimpleGrayscaleImage(img).save("/tmp/earth1_resized.jpg");
+//        inputStream.close();
+//    }
+//
+//    @Test
+//    public void showResizeResult_earth1_caption() throws IOException {
+//        InputStream inputStream = getClass().getClassLoader().getResourceAsStream("earth1_caption.jpeg");
+//        BufferedImage img = ImageIO.read(inputStream);
+//        new SimpleGrayscaleImage(img).save("/tmp/earth1_caption_resized.jpg");
+//        inputStream.close();
+//    }
+//    @Test
+//    public void showResizeResult_earth1_resized() throws IOException {
+//        InputStream inputStream = getClass().getClassLoader().getResourceAsStream("earth1_resized.jpeg");
+//        BufferedImage img = ImageIO.read(inputStream);
+//        new SimpleGrayscaleImage(img).save("/tmp/earth1_resized_resized.jpg");
+//        inputStream.close();
+//    }
 
     private RadialHash getHashFor(String name) throws IOException {
         InputStream inputStream = getClass().getClassLoader().getResourceAsStream(name);

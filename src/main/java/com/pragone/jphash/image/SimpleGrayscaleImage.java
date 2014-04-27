@@ -8,9 +8,10 @@ import java.nio.ByteBuffer;
 
 public class SimpleGrayscaleImage {
     private static final int BYTE_SIZE = 8;
-    private final int width;
-    private final int height;
-    private final ByteBuffer data;
+    private int width;
+    private int height;
+    private ByteBuffer data;
+    private int numPixels;
 //    private static final int[] NORMALIZATION_APROX;
 //    private static final int NORMALIZATION_DENOMINATOR_POWER = 11; // 2048
 //
@@ -26,6 +27,7 @@ public class SimpleGrayscaleImage {
     public SimpleGrayscaleImage(int width, int height) {
         this.width = width;
         this.height = height;
+        this.numPixels = width*height;
         this.data = ByteBuffer.allocateDirect(width*height);
 //            this.pointer = Unsafe.getUnsafe().allocateMemory(width*height);
 //            Unsafe.getUnsafe().setMemory(this.pointer, width * height, (byte) 0);
@@ -34,6 +36,7 @@ public class SimpleGrayscaleImage {
     public SimpleGrayscaleImage(BufferedImage image) {
         this(image.getWidth(), image.getHeight());
         loadImage(image);
+        resizeToNextSize();
         blur();
     }
 
@@ -94,6 +97,81 @@ public class SimpleGrayscaleImage {
             y++;
             this.data.put(width*y+x, (byte) (((buffer_2[y-2] + buffer_1[y-1] + buffer[y])*585)>>10)); // 1024/585 = 1.75042
         }
+    }
+
+    private void resizeToNextSize() {
+        int min = (width < height) ? width : height;
+        min = getClosestSmallerPowerOf2(min);
+        this.resize(min,min);
+    }
+
+    private int getClosestSmallerPowerOf2(int value) {
+        int i = 0;
+        int v = 1;
+        while (v < value && i < 24) {
+            i++;
+            v=v<<1;
+        }
+        return v >> 1;
+    }
+
+    public void resize(int dest_width, int dest_height) {
+        ByteBuffer newData = ByteBuffer.allocateDirect(dest_width * dest_height);
+
+        double tx = ((double) width) / dest_width;
+        double ty = ((double) height) / dest_height;
+
+        int Cc;
+        int C[] = new int[5];
+        int d0, d2, d3, a0, a1, a2, a3;
+
+        for (int i = 0; i < dest_height; ++i) {
+            for (int j = 0; j < dest_width; ++j) {
+                int x = (int) (tx * j);
+                int y = (int) (ty * i);
+                double dx = tx * j - x;
+                double dy = ty * i - y;
+
+                for (int jj = 0; jj <= 3; ++jj) {
+                    d0 = safeGet((y - 1 + jj) * width + (x - 1)) -
+                            safeGet((y - 1 + jj) * width + (x));
+                    d2 = safeGet((y - 1 + jj) * width + (x + 1)) -
+                            safeGet((y - 1 + jj) * width + (x));
+                    d3 = safeGet((y - 1 + jj) * width + (x + 2)) -
+                            safeGet((y - 1 + jj) * width + (x));
+                    a0 = safeGet((y - 1 + jj) * width + (x));
+                    a1 = (int) (-1.0 / 3 * d0 + d2 - 1.0 / 6 * d3);
+                    a2 = (int) (1.0 / 2 * d0 + 1.0 / 2 * d2);
+                    a3 = (int) (-1.0 / 6 * d0 - 1.0 / 2 * d2 + 1.0 / 6 * d3);
+                    C[jj] = (int) (a0 + a1 * dx + a2 * dx * dx + a3 * dx * dx * dx);
+
+                    d0 = C[0] - C[1];
+                    d2 = C[2] - C[1];
+                    d3 = C[3] - C[1];
+                    a0 = C[1];
+                    a1 = (int) (-1.0 / 3 * d0 + d2 -1.0 / 6 * d3);
+                    a2 = (int) (1.0 / 2 * d0 + 1.0 / 2 * d2);
+                    a3 = (int) (-1.0 / 6 * d0 - 1.0 / 2 * d2 + 1.0 / 6 * d3);
+                    Cc = (int) (a0 + a1 * dy + a2 * dy * dy + a3* dy * dy * dy);
+                    newData.put(i * dest_width + j, (byte) (Cc & 0xFF));
+                }
+            }
+        }
+        this.data = newData;
+        this.width = dest_width;
+        this.height = dest_height;
+        this.numPixels = width*height;
+    }
+
+
+    private int safeGet(int index) {
+        if (index < 0) {
+            return 0;
+        }
+        if (index >= numPixels) {
+            return 0;
+        }
+        return this.data.get(index) & 0xFF;
     }
 
     public void loadImage(BufferedImage image) {
