@@ -1,0 +1,17 @@
+*.iml
+**/*.iml
+**/*.ipr
+**/.idea
+target
+.settings
+.project
+.classpath
+.tomcatplugin
+work
+.#webclasspath
+.idea
+WebContent
+box/maven_build
+test-output
+box/bdd/box-bdd-components/velocity.log
+box/bdd/box-bdd-components/seleniumConfigFile.xml
