@@ -1,5 +1,7 @@
 package com.pragone.jphash.image.radial;
 
+import com.pragone.jphash.util.HexUtil;
+
 /**
  * User: pragone
  * Date: 25/04/2014
@@ -14,5 +16,16 @@ public class RadialHash {
 
     public byte[] getCoefficients() {
         return coefficients;
+    }
+
+    @Override
+    public String toString() {
+        return HexUtil.byteArrayToString(coefficients);
+    }
+
+    public static RadialHash fromString(String string) {
+        RadialHash temp = new RadialHash(string.length()/2);
+        HexUtil.stringToByteArray(string, temp.coefficients);
+        return temp;
     }
 }
