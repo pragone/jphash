@@ -98,6 +98,24 @@ public class RadialHashAlgorithmTest {
 //        inputStream.close();
 //    }
 
+    private static double norm2(byte[] q) {
+        if (q == null) {
+            throw new IllegalArgumentException("Norm can only be calculated on a non-null vector");
+        }
+        double resp = 0;
+        for (int i = 0; i < q.length; i++) {
+            resp += q[i]*q[i];
+        }
+        return Math.sqrt(resp);
+    }
+
+//    @Test
+//    public void checkNorms() throws IOException {
+//        System.out.println(norm2(getHashFor("earth1.jpg").getCoefficients()));
+//        System.out.println(norm2(getHashFor("earth1_caption.jpeg").getCoefficients()));
+//        System.out.println(norm2(getHashFor("earth1_cropped.jpeg").getCoefficients()));
+//    }
+
     private RadialHash getHashFor(String name) throws IOException {
         InputStream inputStream = getClass().getClassLoader().getResourceAsStream(name);
         RadialHash hash = RadialHashAlgorithm.getHash(inputStream);
