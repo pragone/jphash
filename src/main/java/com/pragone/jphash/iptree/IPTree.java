@@ -13,33 +13,57 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  * To change this template use File | Settings | File Templates.
  */
 public class IPTree {
-
-    private final int maxNodeSize;
-    protected List<double[]> vectors;
-    protected IPTree left = null;
-    protected IPTree right = null;
-    private double[] mean;
-    private double radius;
     private ReadWriteLock modificationLock = new ReentrantReadWriteLock();
 
-    public IPTree(int maxNodeSize) {
+    // Tree configuration info
+    private final int maxNodeSize;
+    private final int dimensions;
+
+    // Info for leafs
+    protected List<double[]> vectors;
+
+    // Info for non-leaf
+    protected double[] lpivot = null;
+    protected double[] rpivot = null;
+    protected IPTree left = null;
+    protected IPTree right = null;
+
+    // Content info... this information needs to be updated on each add
+    private double[] mean;
+    private double radius = 0;
+    private long numVectors = 0;
+    protected double[] meanAcum;
+
+    public IPTree(int maxNodeSize, int dimensions) {
         this.maxNodeSize = maxNodeSize;
+        this.dimensions = dimensions;
+        this.meanAcum = new double[dimensions];
+        this.mean = new double[dimensions];
+        this.vectors = new ArrayList<double[]>(maxNodeSize);
     }
 
-    public IPTree(int maxNodeSize, List<double[]> vectors) {
-        this(maxNodeSize);
-        this.vectors = vectors;
-        balance();
+    public IPTree(int maxNodeSize, int dimensions, List<double[]> vectors) {
+        this(maxNodeSize, dimensions);
+        this.vectors.addAll(vectors);
+        updateContentInfo();
+        splitIfNecessary();
     }
 
     public double[] query(double[] q) {
+        return query(q,null);
+    }
+
+    public double[] query(double[] q, QueryStats stats) {
         try {
             modificationLock.readLock().lock();
             if (isEmpty()) {
                 return null;
             }
             Query query = new Query(q);
+            query.stats = stats;
+            query.setStartTime();
             treeSearch(query, this);
+            query.setEndTime();
             return query.bm;
         } finally {
             modificationLock.readLock().unlock();
@@ -47,17 +71,24 @@ public class IPTree {
     }
 
     public void add(double[] vector) {
-        try {
-            modificationLock.writeLock().lock();
-            if (vectors == null) {
-                initVectors();
+        if (!isLeaf()) {
+            double ldist = euclideanDistanceSquared(vector, lpivot);
+            double rdist = euclideanDistanceSquared(vector, rpivot);
+            if (ldist < rdist) {
+                left.add(vector);
+            } else {
+                right.add(vector);
             }
-            vectors.add(vector);
-            if (vectors.size() > maxNodeSize) {
-                balance();
+        } else {
+            try {
+                modificationLock.writeLock().lock();
+                vectors.add(vector);
+                if (vectors.size() > maxNodeSize) {
+                    splitIfNecessary();
+                }
+            } finally {
+                modificationLock.writeLock().unlock();
             }
-        } finally {
-            modificationLock.writeLock().unlock();
         }
     }
 
@@ -65,7 +96,7 @@ public class IPTree {
         try {
             modificationLock.writeLock().lock();
             if (isLeaf()) return; // Nothing to do if I'm just a leaf node
-            IPTree temp = new IPTree(maxNodeSize, this.getVectorsRecursive());
+            IPTree temp = new IPTree(maxNodeSize, dimensions, this.getVectorsRecursive());
             copy(temp);
         } finally {
             modificationLock.writeLock().unlock();
@@ -77,7 +108,11 @@ public class IPTree {
         this.right = other.right;
         this.radius = other.radius;
         this.mean = other.mean;
+        this.meanAcum = other.meanAcum;
+        this.numVectors = other.numVectors;
         this.vectors = other.vectors;
+        this.lpivot = other.lpivot;
+        this.rpivot = other.rpivot;
     }
 
     public List<double[]> getVectorsRecursive() {
@@ -103,15 +138,14 @@ public class IPTree {
         return left.getNumVectorsRecursive() + right.getNumVectorsRecursive();
     }
 
-    private void balance() {
+    private void splitIfNecessary() {
         try {
             modificationLock.writeLock().lock();
             if (vectors.size()<= maxNodeSize) {
                 return;
             }
-            this.mean = calculateMean();
-            double[] lpivot = findFarthest(this.mean);
-            double[] rpivot = findFarthest(lpivot);
+            this.lpivot = findFarthest(this.mean);
+            this.rpivot = findFarthest(lpivot);
             this.radius = euclideanDistanceSquared(this.mean, lpivot);
             ArrayList<double[]> lvectors = new ArrayList<double[]>(vectors.size());
             ArrayList<double[]> rvectors = new ArrayList<double[]>(vectors.size());
@@ -124,9 +158,11 @@ public class IPTree {
                     rvectors.add(v);
                 }
             }
-            this.left = new IPTree(maxNodeSize, lvectors);
-            this.right = new IPTree(maxNodeSize, rvectors);
             this.vectors = null;
+            this.left = new IPTree(maxNodeSize, dimensions, lvectors);
+            lvectors = null;
+            this.right = new IPTree(maxNodeSize, dimensions, rvectors);
+            rvectors = null;
         } finally {
             modificationLock.writeLock().unlock();
         }
@@ -145,48 +181,60 @@ public class IPTree {
         return farthest;
     }
 
-    private double[] calculateMean() {
-        if (vectors == null || vectors.isEmpty()) {
-            return null;
+    /**
+     * Updates all the fields that have to do with the content of this tree.
+     * Namely: mean, radius, numVectors and meanAcum;
+     *
+     * You can only invoke this method on a leaf node
+     * @throws IllegalStateException If this tree represents a non-leaf node
+     */
+    private void updateContentInfo() {
+        if (!isLeaf()) {
+            throw new IllegalStateException("Can't call updateContentInfo on a non-leaf node");
         }
-        int vectorSize = vectors.get(0).length;
-        long[] acum = new long[vectorSize];
+        if (vectors == null || vectors.isEmpty()) {
+            return;
+        }
+        this.numVectors = this.vectors.size();
+        this.meanAcum = new double[dimensions];
         for (double[] v : vectors) {
-            for (int i = 0; i < vectorSize; i++) {
-                acum[i] += v[i];
+            for (int i = 0; i < dimensions; i++) {
+                this.meanAcum[i] += v[i];
             }
         }
-        double[] newMean = new double[vectorSize];
-        int numVectors = vectors.size();
-        for (int i = 0; i < vectorSize; i++) {
-            newMean[i] = ((double) acum[i])/numVectors;
+        this.mean = new double[dimensions];
+        for (int i = 0; i < dimensions; i++) {
+            this.mean[i] = ((double) this.meanAcum[i])/ numVectors;
         }
-        return newMean;
-    }
-
-    private double[] pickRandom() {
-        return vectors.get((int) Math.rint(vectors.size()));
-    }
-
-    private synchronized void initVectors() {
-        if (this.vectors == null) {
-            this.vectors = new ArrayList<double[]>(maxNodeSize);
+        this.radius = 0;
+        for (double[] v : vectors) {
+            double temp = euclideanDistanceSquared(this.mean, v);
+            if (temp > this.radius) {
+                this.radius = temp;
+            }
         }
     }
 
     private static void treeSearch(Query query, IPTree node) {
         if (query.lambda < mip(query, node)) {
+            query.markVisited();
             if (node.isLeaf()) {
                 node.linearSearch(query);
+                query.countVisitedVectors(node.getNumVectorsRecursive());
             } else {
                 double il = mip(query, node.left);
                 double ir = mip(query, node.right);
                 if (il < ir) {
+                    treeSearch(query, node.right);
                     treeSearch(query, node.left);
                 } else {
+                    treeSearch(query, node.left);
                     treeSearch(query, node.right);
                 }
             }
+        } else {
+            query.markSkipped();
+            query.countSkippedVectors(node.getNumVectorsRecursive());
         }
     }
 
@@ -211,7 +259,7 @@ public class IPTree {
         }
     }
 
-    private static int dotProduct(double[] v1, double[] v2) {
+    public static int dotProduct(double[] v1, double[] v2) {
         if (v1 == null || v2 == null || v1.length != v2.length) {
             throw new IllegalArgumentException("Dot Product can only be calculated on two non-null equal-size vectors");
         }
@@ -254,15 +302,57 @@ public class IPTree {
         private final double qNorm;
         private double[] bm;
         private int lambda;
+        private QueryStats stats;
 
         public Query(double[] q) {
             this.q = q;
             this.bm = null;
             this.lambda = Integer.MIN_VALUE;
-            this.qNorm = norm2(q);
+            this.qNorm = Math.sqrt(norm2(q));
         }
 
+        private void markVisited() {
+            if (stats != null) {
+                stats.visitedNodes++;
+            }
+        }
+        private void markSkipped() {
+            if (stats != null) {
+                stats.skippedNodes++;
+            }
+        }
+
+        public void setStartTime() {
+            if (stats != null) {
+                stats.startTime = System.currentTimeMillis();
+            }
+        }
+
+        public void setEndTime() {
+            if (stats != null) {
+                stats.duration = System.currentTimeMillis() - stats.startTime;
+            }
+        }
+
+        public void countVisitedVectors(int numVectors) {
+            if (stats != null) {
+                stats.visitedVectors += numVectors;
+            }
+        }
+
+        public void countSkippedVectors(int numVectors) {
+            if (stats != null) {
+                stats.skippedVectors += numVectors;
+            }
+        }
     }
 
-
+    public static class QueryStats {
+        public int visitedNodes;
+        public int skippedNodes;
+        public long startTime;
+        public long duration;
+        public int visitedVectors;
+        public int skippedVectors;
+    }
 }

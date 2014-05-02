@@ -1,89 +1,37 @@
 package com.pragone.jphash.image;
 
-import sun.jvm.hotspot.debugger.Debugger;
-import sun.misc.Cleaner;
+import sun.misc.Unsafe;
 
-import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
-import java.io.File;
-import java.io.IOException;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
-import java.nio.ByteBuffer;
-import java.util.HashMap;
-import java.util.Map;
+import java.lang.reflect.Field;
 
-public class SimpleGrayscaleImage {
+public class UnsafeSimpleGrayscaleImage {
     private static final int BYTE_SIZE = 8;
-    private static Map<Class<?>, Method> cleanerMethods = new HashMap<Class<?>, Method>();
+    private static final Unsafe unsafeInstance = getUnsafe();
+    private long pointer;
     private int width;
     private int height;
-    private ByteBuffer data;
     private int numPixels;
 
-    static {
-        ByteBuffer temp = ByteBuffer.allocateDirect(16);
-        if (temp != null) {
-            Method cleanerMethod = null;
-            try {
-                cleanerMethod = temp.getClass().getMethod("cleaner");
-                cleanerMethod.setAccessible(true);
-                cleanerMethods.put(temp.getClass(), cleanerMethod);
-
-                try {
-                    Cleaner cleaner = (Cleaner) cleanerMethod.invoke(temp);
-                    cleaner.clean();
-                } catch (Exception e) {
-                    System.err.println("Couldnt clean up temporary Direct Byte Buffer. Possible memory leaks");
-                }
-            } catch (NoSuchMethodException e) {
-                e.printStackTrace();
-            }
+    private static Unsafe getUnsafe() {
+        try {
+            Field f = Unsafe.class.getDeclaredField("theUnsafe");
+            f.setAccessible(true);
+            return (Unsafe) f.get(null);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
         }
     }
 
-    private static Method getCleanerMethod(Class<?> byteBufferClass) {
-        Method temp = cleanerMethods.get(byteBufferClass);
-        if (temp == null) {
-            synchronized (SimpleGrayscaleImage.class) {
-                if (!cleanerMethods.containsKey(byteBufferClass)) {
-                    try {
-                        Method cleanerMethod = temp.getClass().getMethod("cleaner");
-                        cleanerMethod.setAccessible(true);
-                        cleanerMethods.put(temp.getClass(), cleanerMethod);
-                        return cleanerMethod;
-                    } catch (NoSuchMethodException e) {
-                        System.err.println("Couldnt clean up temporary Direct Byte Buffer. Possible memory leaks");
-                    }
-                }
-            }
-            temp = cleanerMethods.get(byteBufferClass);
-        }
-        return temp;
-    }
-//    private static final int[] NORMALIZATION_APROX;
-//    private static final int NORMALIZATION_DENOMINATOR_POWER = 11; // 2048
-//
-//    static {
-//        NORMALIZATION_APROX = new int[256];
-//        double denominator = 1 << NORMALIZATION_DENOMINATOR_POWER;
-//        for (int i = 1; i < 256; i++) {
-//            double toAprox = ((double) 256)/i;
-//            NORMALIZATION_APROX[i] = (int) Math.round(toAprox * denominator);
-//        }
-//    }
-
-    public SimpleGrayscaleImage(int width, int height) {
+    public UnsafeSimpleGrayscaleImage(int width, int height) {
         this.width = width;
         this.height = height;
         this.numPixels = width*height;
-        this.data = ByteBuffer.allocateDirect(width * height);
-
-//            this.pointer = Unsafe.getUnsafe().allocateMemory(width*height);
-//            Unsafe.getUnsafe().setMemory(this.pointer, width * height, (byte) 0);
+        this.pointer = unsafeInstance.allocateMemory(width*height);
+        unsafeInstance.setMemory(this.pointer, width * height, (byte) 0);
     }
 
-    public SimpleGrayscaleImage(BufferedImage image) {
+    public UnsafeSimpleGrayscaleImage(BufferedImage image) {
         this(image.getWidth(), image.getHeight());
         loadImage(image);
         resizeToNextSize();
@@ -98,29 +46,28 @@ public class SimpleGrayscaleImage {
         int[] buffer = new int[width];
         int[] buffer_1 = new int[width];
         int[] buffer_2 = new int[width];
-        this.data.rewind();
         for (int y = 0; y < height; y++) {
             // Copy this horizontal line
             for (int i = 0; i < width; i++) {
-                buffer[i] = this.data.get(width*y + i) & 0xFF;
+                buffer[i] = getByte(width * y + i) & 0xFF;
                 buffer_1[i] = (byte) (buffer[i] >> 1);  // buffer * 0.5
                 buffer_2[i] = (byte) (buffer[i] >> 2);  // buffer * 0.25
             }
             // idx: 0
             long t = ((buffer[0] + buffer_1[1] + buffer_2[2])*585)>>10; // 1024/585 = 1.75042
-            this.data.put(width*y,(byte) (t > 255 ? 255 : t));
+            putByte(width * y, (byte) (t > 255 ? 255 : t));
             t = ((buffer_1[0] + buffer[1] + buffer_1[2] + buffer_2[3])*455)>>10;  // 1024/455 = 2.250549
-            this.data.put(width*y+1,(byte) (t > 255 ? 255 : t));
+            putByte(width*y+1,(byte) (t > 255 ? 255 : t));
             for (int x = 2; x < width-2; x++) {
                 t = (int) (((long) (buffer_2[x-2] + buffer_1[x-1] + buffer[x] + buffer_1[x+1] + buffer_2[x+2]))*409)>>10; // 1024/409 = 2.503 ~ 1 + 2*0.5 + 2*0.25
-                this.data.put(width*y+x, (byte) (t > 255 ? 255 : t));
+                putByte(width*y+x, (byte) (t > 255 ? 255 : t));
             }
             int x = width-2;
             t = ((buffer_2[x-2] + buffer_1[x-1] + buffer[x] + buffer_1[x+1])*455)>>10; // 1024/455 = 2.250549
-            this.data.put(width*y+x, (byte) (t > 255 ? 255 : t));
+            putByte(width*y+x, (byte) (t > 255 ? 255 : t));
             x++;
             t = ((buffer_2[x-2] + buffer_1[x-1] + buffer[x])*585)>>10; // 1024/585 = 1.75042
-            this.data.put(width*y+x, (byte) (t > 255 ? 255 : t));
+            putByte(width*y+x, (byte) (t > 255 ? 255 : t));
         }
 
         // Now a vertical pass
@@ -130,23 +77,31 @@ public class SimpleGrayscaleImage {
         for (int x = 0; x < width; x++) {
             // Copy this vertical line
             for (int i = 0; i < height; i++) {
-                buffer[i] = this.data.get(width*i + x) & 0xFF;
+                buffer[i] = getByte(width*i + x) & 0xFF;
                 buffer_1[i] = (byte) (buffer[i] >> 1);  // buffer * 0.5
                 buffer_2[i] = (byte) (buffer[i] >> 2);  // buffer * 0.25
             }
             // y = 0
-            this.data.put(x,(byte) (((buffer[0] + buffer_1[1] + buffer_2[2])*585)>>10)); // 1024/585 = 1.75042
+            putByte(x,(byte) (((buffer[0] + buffer_1[1] + buffer_2[2])*585)>>10)); // 1024/585 = 1.75042
             // y = 1
-            this.data.put(width+x,(byte) (((buffer_1[0] + buffer[1] + buffer_1[2] + buffer_2[3])*455)>>10)); // 1024/455 = 2.250549
+            putByte(width+x,(byte) (((buffer_1[0] + buffer[1] + buffer_1[2] + buffer_2[3])*455)>>10)); // 1024/455 = 2.250549
             for (int y = 2; y < height-2; y++) {
                 long t =  (((long) (buffer_2[y-2] + buffer_1[y-1] + buffer[y] + buffer_1[y+1] + buffer_2[y+2]))*409)>>10;
-                this.data.put(width*y+x, (byte) (t > 255 ? 255 : t)); // 1024/409 = 2.503 ~ 1 + 2*0.5 + 2*0.25
+                putByte(width*y+x, (byte) (t > 255 ? 255 : t)); // 1024/409 = 2.503 ~ 1 + 2*0.5 + 2*0.25
             }
             int y = height-2;
-            this.data.put(width*y+x, (byte) (((buffer_2[y-2] + buffer_1[y-1] + buffer[y] + buffer_1[y+1])*455)>>10)); // 1024/455 = 2.250549
+            putByte(width*y+x, (byte) (((buffer_2[y-2] + buffer_1[y-1] + buffer[y] + buffer_1[y+1])*455)>>10)); // 1024/455 = 2.250549
             y++;
-            this.data.put(width*y+x, (byte) (((buffer_2[y-2] + buffer_1[y-1] + buffer[y])*585)>>10)); // 1024/585 = 1.75042
+            putByte(width*y+x, (byte) (((buffer_2[y-2] + buffer_1[y-1] + buffer[y])*585)>>10)); // 1024/585 = 1.75042
         }
+    }
+
+    private byte getByte(long offset) {
+        return unsafeInstance.getByte(this.pointer + offset);
+    }
+    
+    private void putByte(long offset, byte value) {
+        unsafeInstance.putByte(this.pointer + offset, value);
     }
 
     private void resizeToNextSize() {
@@ -166,7 +121,7 @@ public class SimpleGrayscaleImage {
     }
 
     public void resize(int dest_width, int dest_height) {
-        ByteBuffer newData = ByteBuffer.allocateDirect(dest_width * dest_height);
+        long newData = unsafeInstance.allocateMemory(dest_width * dest_height);
 
         double tx = ((double) width) / dest_width;
         double ty = ((double) height) / dest_height;
@@ -203,12 +158,13 @@ public class SimpleGrayscaleImage {
                     a2 = (int) (1.0 / 2 * d0 + 1.0 / 2 * d2);
                     a3 = (int) (-1.0 / 6 * d0 - 1.0 / 2 * d2 + 1.0 / 6 * d3);
                     Cc = (int) (a0 + a1 * dy + a2 * dy * dy + a3* dy * dy * dy);
-                    newData.put(i * dest_width + j, (byte) (Cc & 0xFF));
+                    unsafeInstance.putByte(newData + i * dest_width + j, (byte) (Cc & 0xFF));
                 }
             }
         }
-        dispose();
-        this.data = newData;
+        long temp = this.pointer;
+        this.pointer = newData;
+        release(temp);
         this.width = dest_width;
         this.height = dest_height;
         this.numPixels = width*height;
@@ -222,7 +178,7 @@ public class SimpleGrayscaleImage {
         if (index >= numPixels) {
             return 0;
         }
-        return this.data.get(index) & 0xFF;
+        return getByte(index) & 0xFF;
     }
 
     public void loadImage(BufferedImage image) {
@@ -249,7 +205,7 @@ public class SimpleGrayscaleImage {
 
             if (numComponents == 1) {
                 // Already byte gray
-                this.data.put(tempBuffer, 0, numPixels);
+                putBytes(tempBuffer, 0, numPixels,0);
             } else if (image.getType() == BufferedImage.TYPE_3BYTE_BGR) {
                 int j = 0;
                 for (int i = 0; i< bufferSize; i+= numComponents) {
@@ -275,7 +231,7 @@ public class SimpleGrayscaleImage {
                     if (y > maxPixel) {
                         maxPixel = y;
                     }
-                    this.data.put(j++,(byte) y);
+                    putByte(j++,(byte) y);
                 }
             } else {
                 throw new IllegalArgumentException("Can't work with this type of byte image: " + image.getType());
@@ -287,28 +243,44 @@ public class SimpleGrayscaleImage {
             // Let's normalize amount of light
             // V1: with double math
             for (int i =0; i < numPixels; i++) {
-                long temp = (this.data.get(i) << 8) / maxPixel;
-                this.data.put(i, (byte) (temp & 0xFF));
+                long temp = (getByte(i) << 8) / maxPixel;
+                putByte(i, (byte) (temp & 0xFF));
             }
             // V2: with int only math
 //            for (int i =0; i < numPixels; i++) {
-//                long temp = (this.data.get(i) * NORMALIZATION_APROX[this.maxPixel]) >> NORMALIZATION_DENOMINATOR_POWER;
-//                this.data.put(i, (byte) (temp & 0xFF));
+//                long temp = (getByte(i) * NORMALIZATION_APROX[this.maxPixel]) >> NORMALIZATION_DENOMINATOR_POWER;
+//                putByte(i, (byte) (temp & 0xFF));
 //            }
         }
 
     }
 
-    public void save(String path) {
-        BufferedImage temp = new BufferedImage(width,height,BufferedImage.TYPE_BYTE_GRAY);
-        byte[] buffer = new byte[width*height];
-        this.data.rewind();
-        this.data.get(buffer);
-        temp.getRaster().setDataElements(0,0,width,height,buffer);
-        try {
-            ImageIO.write(temp, "jpg", new File(path));
-        } catch (IOException e) {
+    private void putBytes(byte[] buffer, long bufferOffset, long numBytes, long toMemoryOffset) {
+        for (long i = 0;  i < numBytes; i++) {
+            putByte(toMemoryOffset + i, buffer[(int) (bufferOffset+i)]);
         }
+    }
+
+//    public void save(String path) {
+//        BufferedImage temp = new BufferedImage(width,height,BufferedImage.TYPE_BYTE_GRAY);
+//        byte[] buffer = new byte[width*height];
+//        this.data.rewind();
+//        getByte(buffer);
+//        temp.getRaster().setDataElements(0,0,width,height,buffer);
+//        try {
+//            ImageIO.write(temp, "jpg", new File(path));
+//        } catch (IOException e) {
+//        }
+//    }
+
+    private static long allocate(long size) {
+        long temp = unsafeInstance.allocateMemory(size);
+        unsafeInstance.setMemory(temp, size, (byte) 0);
+        return temp;
+    }
+
+    private static void release(long pointer) {
+        unsafeInstance.freeMemory(pointer);
     }
 
     public int getWidth() {
@@ -320,23 +292,11 @@ public class SimpleGrayscaleImage {
     }
 
     public int get(int x, int y) {
-        return this.data.get(width*y + x) & 0xFF;
+        return getByte(width*y + x) & 0xFF;
     }
 
     public void dispose() {
-        if (this.data != null && this.data.isDirect()) {
-
-            Method cleanerMethod = getCleanerMethod(this.data.getClass());
-            try {
-                Cleaner cleaner = (Cleaner) cleanerMethod.invoke(this.data);
-                cleaner.clean();
-            } catch (InvocationTargetException e) {
-                e.printStackTrace();  //To change body of catch statement use File | Settings | File Templates.
-            } catch (IllegalAccessException e) {
-                e.printStackTrace();  //To change body of catch statement use File | Settings | File Templates.
-            }
-
-        }
+        release(this.pointer);
     }
 
 //        @Override
