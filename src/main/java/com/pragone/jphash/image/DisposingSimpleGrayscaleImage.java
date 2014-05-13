@@ -1,6 +1,5 @@
 package com.pragone.jphash.image;
 
-import sun.jvm.hotspot.debugger.Debugger;
 import sun.misc.Cleaner;
 
 import javax.imageio.ImageIO;
@@ -13,21 +12,77 @@ import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
 
-public class SimpleGrayscaleImage {
+public class DisposingSimpleGrayscaleImage {
     private static final int BYTE_SIZE = 8;
+    private static Map<Class<?>, Method> cleanerMethods = new HashMap<Class<?>, Method>();
     private int width;
     private int height;
     private ByteBuffer data;
     private int numPixels;
 
-    public SimpleGrayscaleImage(int width, int height) {
+    static {
+        ByteBuffer temp = ByteBuffer.allocateDirect(16);
+        if (temp != null) {
+            Method cleanerMethod = null;
+            try {
+                cleanerMethod = temp.getClass().getMethod("cleaner");
+                cleanerMethod.setAccessible(true);
+                cleanerMethods.put(temp.getClass(), cleanerMethod);
+
+                try {
+                    Cleaner cleaner = (Cleaner) cleanerMethod.invoke(temp);
+                    cleaner.clean();
+                } catch (Exception e) {
+                    System.err.println("Couldnt clean up temporary Direct Byte Buffer. Possible memory leaks");
+                }
+            } catch (NoSuchMethodException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    private static Method getCleanerMethod(Class<?> byteBufferClass) {
+        Method temp = cleanerMethods.get(byteBufferClass);
+        if (temp == null) {
+            synchronized (DisposingSimpleGrayscaleImage.class) {
+                if (!cleanerMethods.containsKey(byteBufferClass)) {
+                    try {
+                        Method cleanerMethod = temp.getClass().getMethod("cleaner");
+                        cleanerMethod.setAccessible(true);
+                        cleanerMethods.put(temp.getClass(), cleanerMethod);
+                        return cleanerMethod;
+                    } catch (NoSuchMethodException e) {
+                        System.err.println("Couldnt clean up temporary Direct Byte Buffer. Possible memory leaks");
+                    }
+                }
+            }
+            temp = cleanerMethods.get(byteBufferClass);
+        }
+        return temp;
+    }
+//    private static final int[] NORMALIZATION_APROX;
+//    private static final int NORMALIZATION_DENOMINATOR_POWER = 11; // 2048
+//
+//    static {
+//        NORMALIZATION_APROX = new int[256];
+//        double denominator = 1 << NORMALIZATION_DENOMINATOR_POWER;
+//        for (int i = 1; i < 256; i++) {
+//            double toAprox = ((double) 256)/i;
+//            NORMALIZATION_APROX[i] = (int) Math.round(toAprox * denominator);
+//        }
+//    }
+
+    public DisposingSimpleGrayscaleImage(int width, int height) {
         this.width = width;
         this.height = height;
         this.numPixels = width*height;
         this.data = ByteBuffer.allocateDirect(width * height);
+
+//            this.pointer = Unsafe.getUnsafe().allocateMemory(width*height);
+//            Unsafe.getUnsafe().setMemory(this.pointer, width * height, (byte) 0);
     }
 
-    public SimpleGrayscaleImage(BufferedImage image) {
+    public DisposingSimpleGrayscaleImage(BufferedImage image) {
         this(image.getWidth(), image.getHeight());
         loadImage(image);
         resizeToNextSize();
@@ -151,6 +206,7 @@ public class SimpleGrayscaleImage {
                 }
             }
         }
+        dispose();
         this.data = newData;
         this.width = dest_width;
         this.height = dest_height;
@@ -179,8 +235,14 @@ public class SimpleGrayscaleImage {
             try{
             tempBuffer = new byte[bufferSize];
             }catch (OutOfMemoryError e) {
-                System.out.println("Died trying to allocate a buffer of size: " + bufferSize + ". Please increas heap size!!");
-                throw e;
+                System.out.println("Died trying to allocate a buffer of size: " + bufferSize + "!!");
+                while (true) {
+                    try {
+                        Thread.sleep(1000);
+                    } catch (InterruptedException e1) {
+                        e1.printStackTrace();  //To change body of catch statement use File | Settings | File Templates.
+                    }
+                }
             }
             image.getRaster().getDataElements(0,0,width,height,tempBuffer);
 
@@ -260,4 +322,25 @@ public class SimpleGrayscaleImage {
         return this.data.get(width*y + x) & 0xFF;
     }
 
+    public void dispose() {
+        if (this.data != null && this.data.isDirect()) {
+
+            Method cleanerMethod = getCleanerMethod(this.data.getClass());
+            try {
+                Cleaner cleaner = (Cleaner) cleanerMethod.invoke(this.data);
+                cleaner.clean();
+            } catch (InvocationTargetException e) {
+                e.printStackTrace();  //To change body of catch statement use File | Settings | File Templates.
+            } catch (IllegalAccessException e) {
+                e.printStackTrace();  //To change body of catch statement use File | Settings | File Templates.
+            }
+
+        }
+    }
+
+//        @Override
+//        protected void finalize() throws Throwable {
+//            Unsafe.getUnsafe().freeMemory(this.pointer);
+//            super.finalize();
+//        }
 }

@@ -1,5 +1,6 @@
 package com.pragone.jphash.image.radial;
 
+import com.pragone.jphash.image.SimpleGrayscaleImage;
 import com.pragone.jphash.image.UnsafeSimpleGrayscaleImage;
 
 import javax.imageio.ImageIO;
@@ -48,9 +49,9 @@ public class RadialHashAlgorithm {
     }
 
     public static RadialHash getHash(BufferedImage img) throws IOException {
-        UnsafeSimpleGrayscaleImage grayscaleImage = new UnsafeSimpleGrayscaleImage(img);
+        SimpleGrayscaleImage grayscaleImage = new SimpleGrayscaleImage(img);
         Projections projections = calculate180Projections(grayscaleImage);
-        grayscaleImage.dispose();
+//        grayscaleImage.dispose();
         Features features = calculateFeatures(projections);
         RadialHash temp = calculateHash(features);
         return temp;
@@ -127,7 +128,7 @@ public class RadialHashAlgorithm {
         return features;
     }
 
-    private static Projections calculate180Projections(UnsafeSimpleGrayscaleImage img) {
+    private static Projections calculate180Projections(SimpleGrayscaleImage img) {
         int width = img.getWidth();
         int N = 180;
         int height = img.getHeight();
