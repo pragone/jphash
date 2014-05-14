@@ -1,5 +1,8 @@
 package com.pragone.jphash.pruningconetree;
 
+import com.pragone.jphash.index.Query;
+import com.pragone.jphash.index.Vector;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -29,15 +32,28 @@ public class BenchmarkPruningConeTree {
 
         int numQueries = 1000;
         long durationAcum = 0;
-        List<PruningConeTree.Query> queries = new ArrayList<PruningConeTree.Query>(numQueries);
+        List<Query> queries = new ArrayList<Query>(numQueries);
         for (int i = 0; i < numQueries; i++) {
-            queries.add(new PruningConeTree.Query(new PruningConeTree.Vector(getRandomVector(dimensions, 100))));
+            queries.add(new Query(new Vector(getRandomVector(dimensions, 100))));
         }
 
         System.out.println("Starting queries");
-        for (PruningConeTree.Query query : queries) {
+        for (Query query : queries) {
             start = System.nanoTime();
-            double[] resp = tree.query(query);
+            tree.query(query);
+            durationAcum += (System.nanoTime() - start);
+        }
+        System.out.println("Did " + numQueries + " searches in average " + (((double)durationAcum)/(numQueries*1000000)) + " milliseconds each (total: " + durationAcum/1000000 + " ms)");
+
+        for (Query query : queries) {
+            query.reset();
+        }
+        durationAcum = 0;
+        tree.optimize();
+        System.out.println("Starting queries (after optimize)");
+        for (Query query : queries) {
+            start = System.nanoTime();
+            tree.query(query);
             durationAcum += (System.nanoTime() - start);
         }
         System.out.println("Did " + numQueries + " searches in average " + (((double)durationAcum)/(numQueries*1000000)) + " milliseconds each (total: " + durationAcum/1000000 + " ms)");

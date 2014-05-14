@@ -1,5 +1,7 @@
 package com.pragone.jphash.pruningconetree;
 
+import com.pragone.jphash.index.Query;
+import com.pragone.jphash.index.Vector;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -65,21 +67,21 @@ public class PruningConeTreeTest {
             tree.add(vector);
         }
 //        double[] queryVector = getRandomVector(3, 100);
-//        System.out.println("Query: " + (new PruningConeTree.Vector(queryVector)));
+//        System.out.println("Query: " + (new Vector(queryVector)));
         double[] queryVector = {38.76117074251793, 78.43972538522617, 55.35981227709609};
-        PruningConeTree.Vector q = new PruningConeTree.Vector(queryVector);
+        Vector q = new Vector(queryVector);
         double maxDot = Double.MIN_VALUE;
         double[] maxVec = null;
         for (double[] vector : vectors) {
-            double dotproduct =  q.similarity(new PruningConeTree.Vector(vector));
+            double dotproduct =  q.similarity(new Vector(vector));
             if (dotproduct > maxDot) {
                 maxDot = dotproduct;
                 maxVec = vector;
             }
         }
 
-        double[] resp = tree.query(queryVector);
-        Assert.assertArrayEquals(resp,maxVec, 0.0001);
+        Vector resp = tree.query(queryVector);
+        Assert.assertArrayEquals(resp.getCoords(),maxVec, 0.0001);
     }
 
     @Test
@@ -88,19 +90,19 @@ public class PruningConeTreeTest {
         PruningConeTree tree = new PruningConeTree();
         List<double[]> vectors = populateRandom(tree, 20, DIMENSIONS, 100);
         double[] queryVector = getRandomVector(DIMENSIONS, 100);
-        PruningConeTree.Vector q = new PruningConeTree.Vector(queryVector);
+        Vector q = new Vector(queryVector);
         double maxDot = Double.MIN_VALUE;
         double[] maxVec = null;
         for (double[] vector : vectors) {
-            double dotproduct =  q.similarity(new PruningConeTree.Vector(vector));
+            double dotproduct =  q.similarity(new Vector(vector));
             if (dotproduct > maxDot) {
                 maxDot = dotproduct;
                 maxVec = vector;
             }
         }
 
-        double[] resp = tree.query(queryVector);
-        Assert.assertArrayEquals(resp,maxVec, 0.0001);
+        Vector resp = tree.query(queryVector);
+        Assert.assertArrayEquals(resp.getCoords(),maxVec, 0.0001);
     }
 
     @Test
@@ -111,22 +113,22 @@ public class PruningConeTreeTest {
         for (int i = 0; i < 10; i++) {
             vectors.addAll(populateRandom(tree, (int) totalNodes/10, DIMENSIONS, 100, getRandomVector(DIMENSIONS, 500)));
         }
-        PruningConeTree.Vector queryVector = new PruningConeTree.Vector(getRandomVector(DIMENSIONS, 700));
+        Vector queryVector = new Vector(getRandomVector(DIMENSIONS, 700));
 
         double maxDot = Double.MIN_VALUE;
         double[] maxVec = null;
         for (double[] vector : vectors) {
-            double dotproduct = queryVector.similarity(new PruningConeTree.Vector(vector));
+            double dotproduct = queryVector.similarity(new Vector(vector));
             if (dotproduct > maxDot) {
                 maxDot = dotproduct;
                 maxVec = vector;
             }
         }
 
-        PruningConeTree.Query query = new PruningConeTree.Query(queryVector);
-        double[] resp = tree.query(query);
+        Query query = new Query(queryVector);
+        Vector resp = tree.query(query);
 
-        Assert.assertArrayEquals(resp,maxVec, 0.0001);
+        Assert.assertArrayEquals(resp.getCoords(),maxVec, 0.0001);
     }
 
     private List<double[]> populateRandom(PruningConeTree tree, int howMany, int dimensions, int max) {
@@ -144,7 +146,7 @@ public class PruningConeTreeTest {
 
     private void printVectors(List<double[]> vectors) {
         for(double[] vector : vectors) {
-            System.out.println(new PruningConeTree.Vector(vector));
+            System.out.println(new Vector(vector));
         }
     }
 

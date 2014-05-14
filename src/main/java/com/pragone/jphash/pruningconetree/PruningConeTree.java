@@ -1,5 +1,9 @@
 package com.pragone.jphash.pruningconetree;
 
+import com.pragone.jphash.index.Query;
+import com.pragone.jphash.index.SearchIndex;
+import com.pragone.jphash.index.Vector;
+
 import java.util.*;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -11,7 +15,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  * Time: 8:05 AM
  * To change this template use File | Settings | File Templates.
  */
-public class PruningConeTree {
+public class PruningConeTree implements SearchIndex {
     private static final double DEFAULT_DECREASE_FACTOR = 0.75;
     private static final int DEFAULT_MAX_DEPTH = 10;
     private static final Comparator<VectorDistance> VECTOR_DISTANCE_SORTER = new Comparator<VectorDistance>() {
@@ -29,7 +33,8 @@ public class PruningConeTree {
     // Info for leafs
     protected Map<Vector, PruningConeTree> pivots = new HashMap<Vector, PruningConeTree>();
     private double decreaseFactor = DEFAULT_DECREASE_FACTOR;
-    private final int maxDepth;
+    private int maxDepth;
+    private boolean readOnly =false;
 
 
     public PruningConeTree(double maxAngularDistance, double decreaseFactor, int maxDepth) {
@@ -42,11 +47,12 @@ public class PruningConeTree {
         this(Math.PI/4, DEFAULT_DECREASE_FACTOR, DEFAULT_MAX_DEPTH);
     }
 
-    public double[] query(double[] q) {
+    public Vector query(double[] q) {
         return query(new Query(new Vector(q)));
     }
 
-    public double[] query(Query query) {
+    @Override
+    public Vector query(Query query) {
         query.nodeEntry();
         try {
             modificationLock.readLock().lock();
@@ -58,27 +64,28 @@ public class PruningConeTree {
             // First pass
             for (Map.Entry<Vector, PruningConeTree> entry : this.pivots.entrySet()) {
                 Vector pivot = entry.getKey();
+                PruningConeTree branch = entry.getValue();
                 double pivotDistance = query.q.angularDistance(pivot);
                 // There are no children under this pivot.
                 if (pivotDistance < query.angularDistanceToBM) {
                     query.angularDistanceToBM = pivotDistance;
                     query.bm = pivot;
                 }
-                if (entry.getValue() != EMPTY) {
-                    if (query.angularDistanceToBM > (pivotDistance-maxAngularDistance)) {
-                        pivotDistances.add(new VectorDistance(pivot, pivotDistance));
+                if (branch != EMPTY) {
+                    if (query.angularDistanceToBM > (pivotDistance-branch.maxAngularDistance)) {
+                        pivotDistances.add(new VectorDistance(pivot, pivotDistance, branch.maxAngularDistance));
                     }
                 }
             }
             // Let's sort the pivots
             Collections.sort(pivotDistances, VECTOR_DISTANCE_SORTER);
             for (VectorDistance vectorDistance : pivotDistances) {
-                if (query.angularDistanceToBM > (vectorDistance.value-maxAngularDistance)) {
+                if (query.angularDistanceToBM > (vectorDistance.value-vectorDistance.branchMaxAngularDistance)) {
                     // It may contain a closer vector
                     this.pivots.get(vectorDistance.key).query(query);
                 }
             }
-            return query.bm.coords;
+            return query.bm;
         } finally {
             modificationLock.readLock().unlock();
             query.nodeExit();
@@ -89,6 +96,7 @@ public class PruningConeTree {
         add(new Vector(vector));
     }
 
+    @Override
     public void add(Vector vector) {
         try {
             modificationLock.writeLock().lock();
@@ -99,11 +107,16 @@ public class PruningConeTree {
             }
 
             for (Map.Entry<Vector, PruningConeTree> entry : this.pivots.entrySet()) {
-                double distance = vector.angularDistance(entry.getKey());
-                if (distance < maxAngularDistance) {
-                    PruningConeTree branch = entry.getValue();
+                Vector pivot = entry.getKey();
+                PruningConeTree branch = entry.getValue();
+                double distance = vector.angularDistance(pivot);
+                double pivotDistanceThreshold = this.maxAngularDistance;
+                if (branch != EMPTY) {
+                    pivotDistanceThreshold = branch.maxAngularDistance;
+                }
+                if (distance < pivotDistanceThreshold) {
                     if (branch == EMPTY) {
-                        branch = new PruningConeTree(maxAngularDistance*decreaseFactor,decreaseFactor,maxDepth-1);
+                        branch = new PruningConeTree(this.maxAngularDistance*decreaseFactor,decreaseFactor,maxDepth-1);
                         branch.add(entry.getKey());
                         this.pivots.put(entry.getKey(), branch);
                     }
@@ -117,165 +130,128 @@ public class PruningConeTree {
         }
     }
 
+    @Override
+    public boolean isReadOnly() {
+        try {
+            modificationLock.readLock().lock();
+            return readOnly;
+        } finally {
+            modificationLock.readLock().unlock();
+        }
+    }
+
+    @Override
+    public void optimize() {
+        try {
+            modificationLock.writeLock().lock();
+            this.readOnly = true;
+
+            int[] pivotsPerLevel = new int[maxDepth+1];
+            countNonLeavePivotsPerLevel(this, pivotsPerLevel, 0);
+            int[] leavesPerLevel = new int[maxDepth+1];
+            countLeavesPerLevel(this, leavesPerLevel, 0);
+            int[] maxPerLevel = new int[maxDepth+1];
+            maxPivotsPerLevel(this, maxPerLevel, 0);
+            System.out.println("Non-leaves per level\t" + tabJoin(pivotsPerLevel));
+            System.out.println("Leaves per level\t" + tabJoin(leavesPerLevel));
+            System.out.println("Max pivots per level\t" + tabJoin(maxPerLevel));
+
+            removeEmptyNodes();
+
+            pivotsPerLevel = new int[maxDepth+1];
+            countNonLeavePivotsPerLevel(this, pivotsPerLevel, 0);
+            leavesPerLevel = new int[maxDepth+1];
+            countLeavesPerLevel(this, leavesPerLevel, 0);
+            maxPerLevel = new int[maxDepth+1];
+            maxPivotsPerLevel(this, maxPerLevel, 0);
+            System.out.println("Non-leaves per level\t" + tabJoin(pivotsPerLevel));
+            System.out.println("Leaves per level\t" + tabJoin(leavesPerLevel));
+            System.out.println("Max pivots per level\t" + tabJoin(maxPerLevel));
+
+        } finally {
+            modificationLock.writeLock().unlock();
+        }
+    }
+
+    private void removeEmptyNodes() {
+        while (this.pivots.size() == 1) {
+            PruningConeTree child = this.pivots.values().iterator().next();
+            if (child != EMPTY) {
+                this.maxAngularDistance = child.maxAngularDistance;
+                this.pivots = child.pivots;
+                this.maxDepth = child.maxDepth;
+            } else {
+                // This one child is a leaf, so nothing to do
+                break;
+            }
+        }
+        for (PruningConeTree child : this.pivots.values()) {
+            if (child != EMPTY) {
+                child.removeEmptyNodes();
+            }
+        }
+    }
+
+    private String tabJoin(int[] vals) {
+        StringBuilder sb = new StringBuilder();
+        boolean first = true;
+        for (int val : vals) {
+            if (!first) {
+                sb.append('\t');
+            } else {
+                first = false;
+            }
+            sb.append(val);
+        }
+        return sb.toString();
+    }
+
+    private void maxPivotsPerLevel(PruningConeTree tree, int[] pivotsPerLevel, int level) {
+        if (pivotsPerLevel[level] < tree.pivots.size()) {
+            pivotsPerLevel[level] = tree.pivots.size();
+        }
+        for (PruningConeTree pivot : tree.pivots.values()) {
+            if (pivot != EMPTY) {
+                maxPivotsPerLevel(pivot, pivotsPerLevel, level + 1);
+            }
+        }
+    }
+    private void countNonLeavePivotsPerLevel(PruningConeTree tree, int[] pivotsPerLevel, int level) {
+        for (PruningConeTree pivot : tree.pivots.values()) {
+            if (pivot != EMPTY) {
+                pivotsPerLevel[level]++;
+                countNonLeavePivotsPerLevel(pivot, pivotsPerLevel, level + 1);
+            }
+        }
+    }
+    private void countLeavesPerLevel(PruningConeTree tree, int[] pivotsPerLevel, int level) {
+        for (PruningConeTree pivot : tree.pivots.values()) {
+            if (pivot != EMPTY) {
+                countLeavesPerLevel(pivot, pivotsPerLevel, level + 1);
+            } else {
+                pivotsPerLevel[level]++;
+            }
+        }
+    }
+
+    @Override
+    public boolean optimizeMakesReadOnly() {
+        return true;
+    }
+
     private boolean isEmpty() {
         return this.pivots.isEmpty();
-    }
-
-    public static class Query {
-        private final Vector q;
-        private Vector bm;
-        private double angularDistanceToBM;
-        private QueryStats stats;
-
-        public Query(Vector q) {
-            this.q = q;
-            this.bm = null;
-            this.angularDistanceToBM = Double.MAX_VALUE;
-        }
-
-        private void markVisited() {
-            if (stats != null) {
-                stats.visitedNodes++;
-            }
-        }
-        private void markSkipped() {
-            if (stats != null) {
-                stats.skippedNodes++;
-            }
-        }
-
-        public void setStartTime() {
-            if (stats != null) {
-                stats.startTime = System.currentTimeMillis();
-            }
-        }
-
-        public void setEndTime() {
-            if (stats != null) {
-                stats.duration = System.currentTimeMillis() - stats.startTime;
-            }
-        }
-
-        public void countVisitedVectors(int numVectors) {
-            if (stats != null) {
-                stats.visitedVectors += numVectors;
-            }
-        }
-
-        public void countSkippedVectors(int numVectors) {
-            if (stats != null) {
-                stats.skippedVectors += numVectors;
-            }
-        }
-
-        public void nodeEntry() {
-            //To change body of created methods use File | Settings | File Templates.
-        }
-
-        public void nodeExit() {
-            //To change body of created methods use File | Settings | File Templates.
-        }
-
-        public void lockObtained() {
-            //To change body of created methods use File | Settings | File Templates.
-        }
-    }
-
-    public static class QueryStats {
-        public int visitedNodes;
-        public int skippedNodes;
-        public long startTime;
-        public long duration;
-        public int visitedVectors;
-        public int skippedVectors;
-    }
-
-    public static class Vector {
-        private final double[] coords;
-        private double norm2 = -1;
-
-        public Vector(double[] coordinates) {
-            this.coords = coordinates;
-        }
-
-        public double getNorm2() {
-            if (norm2 < 0) {
-                calculateNorm2();
-            }
-            return norm2;
-        }
-
-        protected void calculateNorm2() {
-            double resp = 0;
-            for (int i = 0; i < coords.length; i++) {
-                resp += coords[i]*coords[i];
-            }
-            this.norm2 = Math.sqrt(resp);
-        }
-
-        public double similarity(Vector other) {
-            if (other == null || other.getDimensions() != getDimensions()) {
-                throw new IllegalArgumentException("Similarity can only be calculated on two non-null equal-size vectors");
-            }
-            double t = dotProduct(other);
-            if (t <= 0) {
-                return 0;
-            } else {
-                t = t / (getNorm2()*other.getNorm2());
-                if (t > 1){
-                    return 1;
-                }
-                return t;
-            }
-        }
-
-        public double dotProduct(Vector other) {
-            if (other == null || other.getDimensions() != getDimensions()) {
-                throw new IllegalArgumentException("Dot Product can only be calculated on two non-null equal-size vectors");
-            }
-            int resp = 0;
-            for (int i = 0; i < coords.length; i++) {
-                resp += coords[i]*other.coords[i];
-            }
-            return resp;
-        }
-
-        public double angularDistance(Vector other) {
-            if (other == null || other.getDimensions() != getDimensions()) {
-                throw new IllegalArgumentException("Angular distance can only be calculated on two non-null equal-size vectors");
-            }
-            return Math.acos(similarity(other));
-        }
-
-        public int getDimensions() {
-            return this.coords.length;
-        }
-
-        @Override
-        public String toString() {
-            StringBuilder sb = new StringBuilder();
-            sb.append('{');
-            boolean first = true;
-            for (double element : coords) {
-                if (!first) {
-                    sb.append(", ");
-                } else {
-                    first = false;
-                }
-                sb.append(element);
-            }
-            sb.append('}');
-            return sb.toString();
-        }
     }
 
     private static class VectorDistance {
         public Vector key;
         public double value;
+        public double branchMaxAngularDistance;
 
-        public VectorDistance(Vector key, double value) {
+        public VectorDistance(Vector key, double value, double branchMaxAngularDistance) {
             this.key = key;
             this.value = value;
+            this.branchMaxAngularDistance = branchMaxAngularDistance;
         }
     }
 }
