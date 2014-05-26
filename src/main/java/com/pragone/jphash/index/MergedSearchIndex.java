@@ -1,7 +1,6 @@
 package com.pragone.jphash.index;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -33,12 +32,11 @@ public class MergedSearchIndex implements SearchIndex {
      * @param vector
      */
     @Override
-    public void add(Vector vector) {
+    public boolean add(Vector vector) {
         for (int i = partitions.size() -1; i>=0; i--) {
             SearchIndex partition = partitions.get(i);
             if (!partition.isReadOnly()) {
-                partition.add(vector);
-                return;
+                return partition.add(vector);
             }
         }
         throw new RuntimeException("All partitions of this index are read-only");

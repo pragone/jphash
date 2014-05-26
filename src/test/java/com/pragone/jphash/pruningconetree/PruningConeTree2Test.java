@@ -4,10 +4,10 @@ import com.pragone.jphash.index.DoubleVector;
 import com.pragone.jphash.index.Query;
 import com.pragone.jphash.index.Vector;
 import org.junit.Assert;
+import org.junit.Ignore;
 import org.junit.Test;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 
 /**
  * Created with IntelliJ IDEA.
@@ -16,13 +16,13 @@ import java.util.List;
  * Time: 8:25 AM
  * To change this template use File | Settings | File Templates.
  */
-public class PruningConeTreeTest {
+public class PruningConeTree2Test {
 
     private static final int DIMENSIONS = 40;
 
     @Test
     public void testAdd() {
-        PruningConeTree tree = new PruningConeTree();
+        PruningConeTree2 tree = new PruningConeTree2();
         tree.add(getRandomVector(DIMENSIONS, 100));
     }
 
@@ -30,7 +30,7 @@ public class PruningConeTreeTest {
     @Test
     public void testSearchInLowDimensions() {
         int nodeSize = 10;
-        PruningConeTree tree = new PruningConeTree(Math.PI/4, 0.5, 10);
+        PruningConeTree2 tree = new PruningConeTree2();
         //List<double[]> vectors = populateRandom(tree, 30, 3, 100);
         //printVectors(vectors);
         List<double[]> vectors = new ArrayList<double[]>();
@@ -88,7 +88,7 @@ public class PruningConeTreeTest {
     @Test
     public void testSimpleHierarchicalSearch() {
         int nodeSize = 10;
-        PruningConeTree tree = new PruningConeTree();
+        PruningConeTree2 tree = new PruningConeTree2();
         List<double[]> vectors = populateRandom(tree, 20, DIMENSIONS, 100);
         double[] queryVector = getRandomVector(DIMENSIONS, 100);
         Vector q = new DoubleVector(queryVector);
@@ -107,14 +107,51 @@ public class PruningConeTreeTest {
     }
 
     @Test
+    public void testOptimizeDoesNotAlterResults() {
+        PruningConeTree2 tree = new PruningConeTree2(null, Math.PI/2, PruningConeTree2.DEFAULT_DECREASE_FACTOR, PruningConeTree2.DEFAULT_MAX_DEPTH, 10);
+        int totalNodes = 5000;
+        List<double[]> vectors = new ArrayList<double[]>(totalNodes);
+        for (int i = 0; i < 10; i++) {
+            vectors.addAll(populateRandom(tree, (int) totalNodes/10, DIMENSIONS, 100, getRandomVector(DIMENSIONS, 500)));
+        }
+        //printVectors(vectors);
+        int numQueries = 1000;
+        Map<double[] , double[]> unoptimizedResults = new HashMap<double[], double[]>(numQueries);
+        for (int i = 0; i < numQueries; i++) {
+            double[] temp = getRandomVector(DIMENSIONS, 500);
+            //double[] temp = vectors.get(i);
+            unoptimizedResults.put(temp, ((DoubleVector) tree.query(temp)).getCoords());
+        }
+        tree.optimize();
+
+        for (Map.Entry<double[], double[]> entry : unoptimizedResults.entrySet()) {
+            double[] result = ((DoubleVector) tree.query(entry.getKey())).getCoords();
+            boolean areEqual = Arrays.equals(entry.getValue(), result);
+            if (!areEqual) {
+                System.out.println("Query vector: " + new DoubleVector(entry.getKey()));
+                System.out.println("Expected result vector: " + new DoubleVector(entry.getValue()));
+                System.out.println("Expected distance: " + new DoubleVector(entry.getKey()).angularDistance(new DoubleVector(entry.getValue())));
+                System.out.println("Actual result vector: " + new DoubleVector(result));
+                System.out.println("Actual distance: " + new DoubleVector(entry.getKey()).angularDistance(new DoubleVector(result)));
+            }
+            Assert.assertTrue(areEqual);
+        }
+    }
+
+
+
+
+    @Test
+    @Ignore
     public void testBigHierarchicalSearch() {
-        PruningConeTree tree = new PruningConeTree();
-        int totalNodes = 100000;
+        PruningConeTree2 tree = new PruningConeTree2();
+        int totalNodes = 10000;
         List<double[]> vectors = new ArrayList<double[]>(totalNodes);
         for (int i = 0; i < 10; i++) {
             vectors.addAll(populateRandom(tree, (int) totalNodes/10, DIMENSIONS, 100, getRandomVector(DIMENSIONS, 500)));
         }
         DoubleVector queryVector = new DoubleVector(getRandomVector(DIMENSIONS, 700));
+        System.out.println("Query vector: " + queryVector.toString());
 
         double maxDot = Double.MIN_VALUE;
         double[] maxVec = null;
@@ -125,6 +162,7 @@ public class PruningConeTreeTest {
                 maxVec = vector;
             }
         }
+        tree.optimize();
 
         Query query = new Query(queryVector);
         DoubleVector resp = (DoubleVector) tree.query(query);
@@ -132,10 +170,10 @@ public class PruningConeTreeTest {
         Assert.assertArrayEquals(resp.getCoords(),maxVec, 0.0001);
     }
 
-    private List<double[]> populateRandom(PruningConeTree tree, int howMany, int dimensions, int max) {
+    private List<double[]> populateRandom(PruningConeTree2 tree, int howMany, int dimensions, int max) {
         return populateRandom(tree, howMany, dimensions, max, getRandomVector(dimensions,max));
     }
-    private List<double[]> populateRandom(PruningConeTree tree, int howMany, int dimensions, int max, double[] center) {
+    private List<double[]> populateRandom(PruningConeTree2 tree, int howMany, int dimensions, int max, double[] center) {
         List<double[]> vectors = new ArrayList<double[]>();
         for (int i = 0; i < howMany; i++) {
             double[] vector = getRandomVector(dimensions, max, center);

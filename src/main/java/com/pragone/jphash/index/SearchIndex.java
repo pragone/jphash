@@ -9,7 +9,7 @@ package com.pragone.jphash.index;
  */
 public interface SearchIndex {
     public Vector query(Query query);
-    public void add(Vector vector);
+    public boolean add(Vector vector);
     public boolean isReadOnly();
     public void optimize();
     public boolean optimizeMakesReadOnly();
