@@ -1,6 +1,5 @@
 package com.pragone.jphash.image;
 
-import sun.jvm.hotspot.debugger.Debugger;
 import sun.misc.Cleaner;
 
 import javax.imageio.ImageIO;
