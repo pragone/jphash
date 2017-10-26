@@ -1,7 +1,6 @@
 package com.pragone.jphash.image.radial;
 
 import com.pragone.jphash.image.SimpleGrayscaleImage;
-import com.pragone.jphash.image.UnsafeSimpleGrayscaleImage;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;

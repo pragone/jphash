@@ -5,7 +5,9 @@ import com.pragone.jphash.index.Query;
 import com.pragone.jphash.index.SearchIndex;
 import com.pragone.jphash.index.Vector;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
