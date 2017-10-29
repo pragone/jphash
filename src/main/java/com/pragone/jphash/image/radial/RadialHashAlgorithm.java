@@ -1,5 +1,6 @@
 package com.pragone.jphash.image.radial;
 
+import com.pragone.jphash.image.BigBufferedImage;
 import com.pragone.jphash.image.SimpleGrayscaleImage;
 
 import javax.imageio.ImageIO;
@@ -29,18 +30,11 @@ public class RadialHashAlgorithm {
         }
     }
 
-    public static RadialHash getHash(String file) throws IOException {
-        return getHash(new File(file));
+    public static RadialHash getHash(File file) throws IOException {
+        BufferedImage img = BigBufferedImage.create(file, BigBufferedImage.TYPE_INT_RGB);
+        return getHash(img);
     }
 
-    public static RadialHash getHash(File file) throws IOException {
-        FileInputStream is = new FileInputStream(file);
-        try {
-            return getHash(is);
-        } finally {
-            is.close();
-        }
-    }
 
     public static RadialHash getHash(InputStream inputStream) throws IOException {
         BufferedImage img = ImageIO.read(ImageIO.createImageInputStream(inputStream));
