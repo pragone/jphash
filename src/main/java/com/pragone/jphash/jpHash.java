@@ -15,7 +15,7 @@ import java.io.InputStream;
  */
 public class jpHash {
     public static RadialHash getImageRadialHash(String path) throws IOException {
-        return RadialHashAlgorithm.getHash(new File(path));
+        return RadialHashAlgorithm.getHash(path);
     }
     public static RadialHash getImageRadialHash(File file) throws IOException {
         return RadialHashAlgorithm.getHash(file);
