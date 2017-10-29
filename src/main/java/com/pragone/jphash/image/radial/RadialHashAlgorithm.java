@@ -38,12 +38,12 @@ public class RadialHashAlgorithm {
         try {
             return getHash(is);
         } finally {
-            is.close();;
+            is.close();
         }
     }
 
     public static RadialHash getHash(InputStream inputStream) throws IOException {
-        BufferedImage img = ImageIO.read(inputStream);
+        BufferedImage img = ImageIO.read(ImageIO.createImageInputStream(inputStream));
         return getHash(img);
     }
 
