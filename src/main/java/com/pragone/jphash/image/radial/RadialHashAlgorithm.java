@@ -177,10 +177,10 @@ public class RadialHashAlgorithm {
     }
 
     public static double getSimilarity(RadialHash hash1, RadialHash hash2) {
-        int N = hash1.getCoefficients().length;
-
         byte[] x_coeffs = hash1.getCoefficients();
         byte[] y_coeffs = hash2.getCoefficients();
+
+        int N = x_coeffs.length;
 
         double sumx = 0.0;
         double sumy = 0.0;
@@ -199,7 +199,7 @@ public class RadialHashAlgorithm {
                 double denXCurrent = x_coeffs[i] - meanx;
                 double denYCurrent = y_coeffs[(N + i - d) % N] - meany;
 
-                num  += denXCurrent*denYCurrent;
+                num  += denXCurrent * denYCurrent;
 
                 denx += denXCurrent * denXCurrent;
 
