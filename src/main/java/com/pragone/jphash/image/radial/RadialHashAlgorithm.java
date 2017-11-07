@@ -190,7 +190,9 @@ public class RadialHashAlgorithm {
         }
         double meanx = sumx/N;
         double meany = sumy/N;
+        double[] r = new double[N];
         double max = 0;
+
         for (int d=0;d<N;d++){
             double num = 0.0;
             double denx = 0.0;
@@ -200,15 +202,13 @@ public class RadialHashAlgorithm {
                 double denYCurrent = y_coeffs[(N + i - d) % N] - meany;
 
                 num  += denXCurrent * denYCurrent;
-
                 denx += denXCurrent * denXCurrent;
-
                 deny += denYCurrent * denYCurrent;
             }
 
-            double rD = num/Math.sqrt(denx * deny);
-            if (rD > max)
-                max = rD;
+            r[d] = num/Math.sqrt(denx * deny);
+            if (r[d] > max)
+                max = r[d];
         }
         return max;
     }
