@@ -177,13 +177,11 @@ public class RadialHashAlgorithm {
     }
 
     public static double getSimilarity(RadialHash hash1, RadialHash hash2) {
-
         int N = hash1.getCoefficients().length;
 
         byte[] x_coeffs = hash1.getCoefficients();
         byte[] y_coeffs = hash2.getCoefficients();
 
-        double r[] = new double[N];
         double sumx = 0.0;
         double sumy = 0.0;
         for (int i=0;i < N;i++){
@@ -198,15 +196,21 @@ public class RadialHashAlgorithm {
             double denx = 0.0;
             double deny = 0.0;
             for (int i=0;i<N;i++){
-                num  += (x_coeffs[i]-meanx)*(y_coeffs[(N+i-d)%N]-meany);
-                denx += Math.pow((x_coeffs[i] - meanx), 2);
-                deny += Math.pow((y_coeffs[(N + i - d) % N] - meany), 2);
+                double denXCurrent = x_coeffs[i] - meanx;
+                double denYCurrent = y_coeffs[(N + i - d) % N] - meany;
+
+                num  += denXCurrent*denYCurrent;
+
+                denx += denXCurrent * denXCurrent;
+
+                deny += denYCurrent * denYCurrent;
             }
-            r[d] = num/Math.sqrt(denx * deny);
-            if (r[d] > max)
-                max = r[d];
+
+            double rD = num/Math.sqrt(denx * deny);
+            if (rD > max)
+                max = rD;
         }
-        return max;  //To change body of created methods use File | Settings | File Templates.
+        return max;
     }
 
     private static class Projections {
