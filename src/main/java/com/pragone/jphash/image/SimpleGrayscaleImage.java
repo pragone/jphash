@@ -1,9 +1,7 @@
 package com.pragone.jphash.image;
 
 import java.awt.*;
-import java.awt.color.ColorSpace;
 import java.awt.image.BufferedImage;
-import java.awt.image.ColorConvertOp;
 import java.nio.ByteBuffer;
 
 public class SimpleGrayscaleImage {
@@ -91,8 +89,6 @@ public class SimpleGrayscaleImage {
             g.drawImage(image, 0, 0, RESIZE_WIDTH, RESIZE_HEIGHT, null);
             g.dispose();
 
-//            colorConvert.filter(resizedImage, resizedImage);
-
             numPixels = (RESIZE_WIDTH * RESIZE_HEIGHT);
             width = RESIZE_WIDTH;
             height = RESIZE_HEIGHT;
@@ -102,8 +98,7 @@ public class SimpleGrayscaleImage {
             byte[] tempBuffer = new byte[totalPixels];
             resizedImage.getRaster().getDataElements(0, 0, RESIZE_WIDTH, RESIZE_HEIGHT, tempBuffer);
 
-            data = ByteBuffer.allocateDirect(totalPixels);
-            data.put(tempBuffer);
+            data = ByteBuffer.wrap(tempBuffer, 0, totalPixels);
         } catch (OutOfMemoryError e) {
             System.err.println("Died trying to allocate a buffer for image. Please increase heap size!!");
             throw e;

@@ -34,17 +34,13 @@ public class RadialHashAlgorithm {
     }
 
     public static RadialHash getHash(File file) throws IOException {
-        FileInputStream is = new FileInputStream(file);
-        try {
+        try (FileInputStream is = new FileInputStream(file)) {
             return getHash(is);
-        } finally {
-            is.close();
         }
     }
 
     public static RadialHash getHash(InputStream inputStream) throws IOException {
-        BufferedImage img = ImageIO.read(ImageIO.createImageInputStream(inputStream));
-        return getHash(img);
+        return getHash(ImageIO.read(inputStream));
     }
 
     public static RadialHash getHash(BufferedImage img) throws IOException {
