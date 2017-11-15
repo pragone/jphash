@@ -24,7 +24,7 @@ public class RadialHashAlgorithm {
         THETA_180 = new double[180];
         TAN_THETA_180 = new double[180];
         for (int i = 0; i < 180; i++) {
-            THETA_180[i] = i* Math.PI/180;
+            THETA_180[i] = i * Math.PI / 180;
             TAN_THETA_180[i] = Math.tan(THETA_180[i]);
         }
     }
@@ -48,8 +48,7 @@ public class RadialHashAlgorithm {
         Projections projections = calculate180Projections(grayscaleImage);
 //        grayscaleImage.dispose();
         Features features = calculateFeatures(projections);
-        RadialHash temp = calculateHash(features);
-        return temp;
+        return calculateHash(features);
     }
 
     private static RadialHash calculateHash(Features features) {
@@ -65,25 +64,25 @@ public class RadialHashAlgorithm {
         double D_temp[] = new double[nb_coeffs];
         double max = 0.0;
         double min = 0.0;
-        for (int k = 0;k<nb_coeffs;k++){
+        for (int k = 0; k < nb_coeffs; k++) {
             double sum = 0.0;
-            for (int n=0;n<N;n++){
-                double temp = R[n]*Math.cos((Math.PI * (2 * n + 1) * k) / (2 * N));
+            for (int n = 0; n < N; n++) {
+                double temp = R[n] * Math.cos((Math.PI * (2 * n + 1) * k) / (2 * N));
                 sum += temp;
             }
             if (k == 0)
-                D_temp[k] = sum/Math.sqrt((double) N);
+                D_temp[k] = sum / Math.sqrt((double) N);
             else
-                D_temp[k] = sum*SQRT_TWO/Math.sqrt((double) N);
+                D_temp[k] = sum * SQRT_TWO / Math.sqrt((double) N);
             if (D_temp[k] > max)
                 max = D_temp[k];
             if (D_temp[k] < min)
                 min = D_temp[k];
         }
 
-        for (int i=0;i<nb_coeffs;i++){
+        for (int i = 0; i < nb_coeffs; i++) {
 
-            D[i] = (byte)(UCHAR_MAX*(D_temp[i] - min)/(max - min));
+            D[i] = (byte) (UCHAR_MAX * (D_temp[i] - min) / (max - min));
 
         }
         return digest;
@@ -127,43 +126,43 @@ public class RadialHashAlgorithm {
         int width = img.getWidth();
         int N = 180;
         int height = img.getHeight();
-        int D = (width > height)?width:height;
+        int D = (width > height) ? width : height;
         int x_off = (width >> 1) + (width & 0x1); // round(width/2) but only with integer operations
         int y_off = (height >> 1) + (height & 0x1); // round(height/2) but only with integer operations
 
-        Projections projections = new Projections(N,D);
+        Projections projections = new Projections(N, D);
 
         int[][] ptr_radon_map = projections.projections;
         int[] nb_per_line = projections.nb_pix_perline;
 
-        for (int k=0;k<N/4+1;k++) {
+        for (int k = 0; k < N / 4 + 1; k++) {
             double alpha = TAN_THETA_180[k];
-            for (int x=0;x < D;x++) {
-                double y = alpha*(x-x_off);
-                int yd = (int)Math.floor(y + (y >= 0 ? 0.5 : -0.5));
-                if ((yd + y_off >= 0)&&(yd + y_off < height) && (x < width)) {
+            for (int x = 0; x < D; x++) {
+                double y = alpha * (x - x_off);
+                int yd = (int) Math.floor(y + (y >= 0 ? 0.5 : -0.5));
+                if ((yd + y_off >= 0) && (yd + y_off < height) && (x < width)) {
                     ptr_radon_map[k][x] = img.get(x, yd + y_off);
                     nb_per_line[k] += 1;
                 }
-                if ((yd + x_off >= 0) && (yd + x_off < width) && (k != N/4) && (x < height)) {
-                    ptr_radon_map[N/2-k][x] = img.get(yd + x_off, x);
-                    nb_per_line[N/2-k] += 1;
+                if ((yd + x_off >= 0) && (yd + x_off < width) && (k != N / 4) && (x < height)) {
+                    ptr_radon_map[N / 2 - k][x] = img.get(yd + x_off, x);
+                    nb_per_line[N / 2 - k] += 1;
                 }
             }
         }
-        int j= 0;
-        for (int k=3*N/4;k<N;k++){
+        int j = 0;
+        for (int k = 3 * N / 4; k < N; k++) {
             double alpha = TAN_THETA_180[k];
-            for (int x=0;x < D;x++){
-                double y = alpha*(x-x_off);
-                int yd = (int)Math.floor(y + (y >= 0 ? 0.5 : -0.5));
-                if ((yd + y_off >= 0)&&(yd + y_off < height) && (x < width)){
+            for (int x = 0; x < D; x++) {
+                double y = alpha * (x - x_off);
+                int yd = (int) Math.floor(y + (y >= 0 ? 0.5 : -0.5));
+                if ((yd + y_off >= 0) && (yd + y_off < height) && (x < width)) {
                     ptr_radon_map[k][x] = img.get(x, yd + y_off);
                     nb_per_line[k] += 1;
                 }
-                if ((y_off - yd >= 0)&&(y_off - yd<width)&&(2*y_off-x>=0)&&(2*y_off-x<height)&&(k!=3*N/4)){
-                    ptr_radon_map[k-j][x] = img.get(-yd + y_off, -(x - y_off) + y_off);
-                    nb_per_line[k-j] += 1;
+                if ((y_off - yd >= 0) && (y_off - yd < width) && (2 * y_off - x >= 0) && (2 * y_off - x < height) && (k != 3 * N / 4)) {
+                    ptr_radon_map[k - j][x] = img.get(-yd + y_off, -(x - y_off) + y_off);
+                    nb_per_line[k - j] += 1;
                 }
 
             }
@@ -180,29 +179,31 @@ public class RadialHashAlgorithm {
 
         double sumx = 0.0;
         double sumy = 0.0;
-        for (int i=0;i < N;i++){
+        for (int i = 0; i < N; i++) {
             sumx += x_coeffs[i] & 0xFF;
             sumy += y_coeffs[i] & 0xFF;
         }
-        double meanx = sumx/N;
-        double meany = sumy/N;
+
+        double meanx = sumx / N;
+        double meany = sumy / N;
         double[] r = new double[N];
         double max = 0;
 
-        for (int d=0;d<N;d++){
+        for (int d = 0; d < N; d++) {
             double num = 0.0;
             double denx = 0.0;
             double deny = 0.0;
-            for (int i=0;i<N;i++){
-                double denXCurrent = x_coeffs[i] - meanx;
-                double denYCurrent = y_coeffs[(N + i - d) % N] - meany;
 
-                num  += denXCurrent * denYCurrent;
+            for (int i = 0; i < N; i++) {
+                double denXCurrent = (x_coeffs[i] & 0xFF) - meanx;
+                double denYCurrent = (y_coeffs[(N + i - d) % N] & 0xFF) - meany;
+
+                num += denXCurrent * denYCurrent;
                 denx += denXCurrent * denXCurrent;
                 deny += denYCurrent * denYCurrent;
             }
 
-            r[d] = num/Math.sqrt(denx * deny);
+            r[d] = num / Math.sqrt(denx * deny);
             if (r[d] > max)
                 max = r[d];
         }

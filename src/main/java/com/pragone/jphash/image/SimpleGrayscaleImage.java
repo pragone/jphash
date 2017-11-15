@@ -78,7 +78,6 @@ public class SimpleGrayscaleImage {
         }
     }
 
-//    private ColorConvertOp colorConvert = new ColorConvertOp(ColorSpace.getInstance(ColorSpace.CS_GRAY), null);
     private static final int RESIZE_WIDTH = 1024;
     private static final int RESIZE_HEIGHT = 1024;
 
@@ -98,7 +97,7 @@ public class SimpleGrayscaleImage {
             byte[] tempBuffer = new byte[totalPixels];
             resizedImage.getRaster().getDataElements(0, 0, RESIZE_WIDTH, RESIZE_HEIGHT, tempBuffer);
 
-            data = ByteBuffer.wrap(tempBuffer, 0, totalPixels);
+            data = ByteBuffer.wrap(tempBuffer);
         } catch (OutOfMemoryError e) {
             System.err.println("Died trying to allocate a buffer for image. Please increase heap size!!");
             throw e;
