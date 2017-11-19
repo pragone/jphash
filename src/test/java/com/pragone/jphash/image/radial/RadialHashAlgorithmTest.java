@@ -59,6 +59,15 @@ public class RadialHashAlgorithmTest {
     }
 
     @Test
+    public void testNotEarthDistance() throws IOException {
+        Assert.assertEquals(0.42,
+                RadialHashAlgorithm.getSimilarity(
+                        getHashFor("earth1.jpg"),
+                        getHashFor("not_earth.jpg")
+                ), 0.000001);
+    }
+
+    @Test
     public void testEarthCroppedDistance() throws IOException {
         Assert.assertEquals(EARTH_CROPPED_DISTANCE,
                 RadialHashAlgorithm.getSimilarity(
